@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "build:full": "contentlayer build && next build",
+    "build:vercel": "SKIP_CONTENTLAYER=true next build",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
