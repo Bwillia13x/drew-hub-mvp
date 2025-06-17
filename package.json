@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "contentlayer build && next build",
+    "build": "next build",
+    "build:full": "contentlayer build && next build",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
