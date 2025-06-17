@@ -1,0 +1,600 @@
+---
+title: "E-Commerce Dashboard Analytics"
+description: "Real-time analytics dashboard for e-commerce platforms with advanced data visualization, reporting, and performance metrics."
+stack: ["React", "TypeScript", "D3.js", "Chart.js", "Node.js", "PostgreSQL"]
+repo: "https://github.com/drewwebdev/ecommerce-analytics"
+live: "https://ecommerce-analytics-demo.vercel.app"
+thumbnail: "/images/projects/ecommerce-dashboard.jpg"
+featured: true
+sortOrder: 2
+---
+
+# E-Commerce Dashboard Analytics
+
+A comprehensive analytics dashboard designed for e-commerce platforms, providing real-time insights into sales performance, customer behavior, and business metrics. Built with React, TypeScript, and advanced data visualization libraries.
+
+## Project Overview
+
+This dashboard serves as a centralized hub for e-commerce businesses to monitor key performance indicators, track sales trends, analyze customer behavior, and make data-driven decisions. The platform processes large datasets efficiently and presents information through intuitive, interactive visualizations.
+
+## Key Features
+
+### 📊 Real-Time Analytics
+- **Live Sales Tracking** with real-time updates
+- **Customer Activity Monitoring** across multiple touchpoints
+- **Inventory Management** with automated alerts
+- **Revenue Tracking** with hourly, daily, and monthly breakdowns
+
+### 📈 Advanced Visualizations
+- **Interactive Charts** using D3.js and Chart.js
+- **Heat Maps** for user behavior analysis
+- **Funnel Analysis** for conversion optimization
+- **Cohort Analysis** for customer retention insights
+
+### 🎯 Performance Metrics
+- **Key Performance Indicators** (KPIs) dashboard
+- **Conversion Rate Optimization** tools
+- **Customer Lifetime Value** calculations
+- **Product Performance** analysis
+
+### 🔍 Data Filtering & Segmentation
+- **Advanced Filters** by date range, product category, customer segment
+- **Custom Segments** creation and analysis
+- **Comparative Analysis** between different time periods
+- **Export Capabilities** for further analysis
+
+## Technical Implementation
+
+### Frontend Architecture
+
+#### Component Structure
+```typescript
+// components/Dashboard/DashboardLayout.tsx
+interface DashboardLayoutProps {
+  children: React.ReactNode
+  sidebar?: React.ReactNode
+  header?: React.ReactNode
+}
+
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
+  children,
+  sidebar,
+  header
+}) => {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {header && (
+        <header className="bg-white shadow-sm border-b">
+          {header}
+        </header>
+      )}
+      <div className="flex">
+        {sidebar && (
+          <aside className="w-64 bg-white shadow-sm">
+            {sidebar}
+          </aside>
+        )}
+        <main className="flex-1 p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  )
+}
+```
+
+#### Data Visualization Components
+```typescript
+// components/Charts/SalesChart.tsx
+import { Line } from 'react-chartjs-2'
+import { useSalesData } from '@/hooks/useSalesData'
+
+interface SalesChartProps {
+  timeRange: 'daily' | 'weekly' | 'monthly'
+  productId?: string
+}
+
+export const SalesChart: React.FC<SalesChartProps> = ({ 
+  timeRange, 
+  productId 
+}) => {
+  const { data, loading, error } = useSalesData({ timeRange, productId })
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: `Sales Performance - ${timeRange}`,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: function(value: any) {
+            return '$' + value.toLocaleString()
+          }
+        }
+      }
+    }
+  }
+
+  if (loading) return <ChartSkeleton />
+  if (error) return <ErrorMessage error={error} />
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow">
+      <Line data={data} options={chartOptions} />
+    </div>
+  )
+}
+```
+
+### Backend API Design
+
+#### Data Processing Pipeline
+```typescript
+// api/analytics/sales.ts
+import { NextApiRequest, NextApiResponse } from 'next'
+import { db } from '@/lib/database'
+import { authenticateUser } from '@/lib/auth'
+import { calculateSalesMetrics } from '@/lib/analytics'
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  try {
+    const user = await authenticateUser(req)
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { timeRange, startDate, endDate, productId } = req.query
+
+    const rawData = await db.order.findMany({
+      where: {
+        storeId: user.storeId,
+        createdAt: {
+          gte: new Date(startDate as string),
+          lte: new Date(endDate as string),
+        },
+        ...(productId && { 
+          items: { 
+            some: { productId: productId as string } 
+          } 
+        }),
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        customer: true,
+      },
+    })
+
+    const analytics = calculateSalesMetrics(rawData, timeRange as string)
+
+    res.status(200).json({
+      success: true,
+      data: analytics,
+      meta: {
+        totalOrders: rawData.length,
+        timeRange,
+        generatedAt: new Date().toISOString(),
+      },
+    })
+  } catch (error) {
+    console.error('Sales analytics error:', error)
+    res.status(500).json({ 
+      error: 'Failed to fetch sales analytics',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    })
+  }
+}
+```
+
+#### Real-Time Data Updates
+```typescript
+// lib/websocket/analytics.ts
+import { Server as SocketIOServer } from 'socket.io'
+import { authenticateSocket } from './auth'
+
+export const setupAnalyticsSocket = (io: SocketIOServer) => {
+  const analyticsNamespace = io.of('/analytics')
+
+  analyticsNamespace.use(authenticateSocket)
+
+  analyticsNamespace.on('connection', (socket) => {
+    console.log(`Analytics client connected: ${socket.id}`)
+
+    socket.on('subscribe-to-sales', (storeId: string) => {
+      socket.join(`sales:${storeId}`)
+      
+      // Send initial data
+      getSalesData(storeId).then(data => {
+        socket.emit('sales-update', data)
+      })
+    })
+
+    socket.on('disconnect', () => {
+      console.log(`Analytics client disconnected: ${socket.id}`)
+    })
+  })
+
+  // Emit updates when new orders come in
+  const emitSalesUpdate = (storeId: string, orderData: any) => {
+    analyticsNamespace.to(`sales:${storeId}`).emit('sales-update', {
+      type: 'new-order',
+      data: orderData,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  return { emitSalesUpdate }
+}
+```
+
+### Database Optimization
+
+#### Efficient Queries
+```sql
+-- Optimized query for sales analytics
+WITH daily_sales AS (
+  SELECT 
+    DATE(created_at) as sale_date,
+    SUM(total_amount) as daily_revenue,
+    COUNT(*) as daily_orders,
+    COUNT(DISTINCT customer_id) as unique_customers
+  FROM orders 
+  WHERE 
+    store_id = $1 
+    AND created_at >= $2 
+    AND created_at <= $3
+    AND status = 'completed'
+  GROUP BY DATE(created_at)
+),
+product_performance AS (
+  SELECT 
+    p.id,
+    p.name,
+    SUM(oi.quantity) as units_sold,
+    SUM(oi.quantity * oi.price) as revenue
+  FROM products p
+  JOIN order_items oi ON p.id = oi.product_id
+  JOIN orders o ON oi.order_id = o.id
+  WHERE 
+    o.store_id = $1 
+    AND o.created_at >= $2 
+    AND o.created_at <= $3
+    AND o.status = 'completed'
+  GROUP BY p.id, p.name
+  ORDER BY revenue DESC
+  LIMIT 10
+)
+SELECT * FROM daily_sales, product_performance;
+```
+
+#### Indexing Strategy
+```typescript
+// prisma/schema.prisma
+model Order {
+  id         String   @id @default(cuid())
+  storeId    String
+  customerId String?
+  status     OrderStatus
+  totalAmount Decimal
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Indexes for analytics queries
+  @@index([storeId, createdAt])
+  @@index([storeId, status, createdAt])
+  @@index([customerId, createdAt])
+  @@map("orders")
+}
+```
+
+## Advanced Features
+
+### Custom Metrics Builder
+```typescript
+// components/MetricsBuilder/MetricsBuilder.tsx
+interface MetricConfig {
+  name: string
+  type: 'sum' | 'count' | 'average' | 'ratio'
+  field: string
+  filters?: FilterConfig[]
+  groupBy?: string
+}
+
+export const MetricsBuilder: React.FC = () => {
+  const [metrics, setMetrics] = useState<MetricConfig[]>([])
+  const [isBuilding, setIsBuilding] = useState(false)
+
+  const addMetric = (config: MetricConfig) => {
+    setMetrics(prev => [...prev, { ...config, id: generateId() }])
+  }
+
+  const calculateCustomMetric = async (config: MetricConfig) => {
+    const response = await fetch('/api/analytics/custom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+    
+    return response.json()
+  }
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow">
+      <h3 className="text-lg font-semibold mb-4">Custom Metrics Builder</h3>
+      {/* Metric builder UI */}
+    </div>
+  )
+}
+```
+
+### Predictive Analytics
+```typescript
+// lib/analytics/predictions.ts
+import * as tf from '@tensorflow/tfjs'
+
+export class SalesPredictor {
+  private model: tf.LayersModel | null = null
+
+  async loadModel() {
+    this.model = await tf.loadLayersModel('/models/sales-prediction/model.json')
+  }
+
+  async predictSales(historicalData: number[], daysAhead: number = 7) {
+    if (!this.model) {
+      await this.loadModel()
+    }
+
+    // Normalize data
+    const normalized = this.normalizeData(historicalData)
+    
+    // Create tensor
+    const inputTensor = tf.tensor2d([normalized], [1, normalized.length])
+    
+    // Make prediction
+    const prediction = this.model!.predict(inputTensor) as tf.Tensor
+    const result = await prediction.data()
+    
+    // Denormalize and return
+    return this.denormalizeData(Array.from(result))
+  }
+
+  private normalizeData(data: number[]) {
+    const max = Math.max(...data)
+    const min = Math.min(...data)
+    return data.map(val => (val - min) / (max - min))
+  }
+
+  private denormalizeData(data: number[]) {
+    // Implementation depends on normalization strategy
+    return data
+  }
+}
+```
+
+## Performance Optimizations
+
+### Data Caching
+```typescript
+// lib/cache/analytics.ts
+import Redis from 'ioredis'
+
+const redis = new Redis(process.env.REDIS_URL)
+
+export class AnalyticsCache {
+  private generateKey(storeId: string, params: any) {
+    return `analytics:${storeId}:${JSON.stringify(params)}`
+  }
+
+  async get(storeId: string, params: any) {
+    const key = this.generateKey(storeId, params)
+    const cached = await redis.get(key)
+    return cached ? JSON.parse(cached) : null
+  }
+
+  async set(storeId: string, params: any, data: any, ttl: number = 300) {
+    const key = this.generateKey(storeId, params)
+    await redis.setex(key, ttl, JSON.stringify(data))
+  }
+
+  async invalidate(storeId: string) {
+    const pattern = `analytics:${storeId}:*`
+    const keys = await redis.keys(pattern)
+    if (keys.length > 0) {
+      await redis.del(...keys)
+    }
+  }
+}
+```
+
+### Virtual Scrolling for Large Datasets
+```typescript
+// components/DataTable/VirtualizedTable.tsx
+import { FixedSizeList as List } from 'react-window'
+
+interface VirtualizedTableProps {
+  data: any[]
+  columns: ColumnConfig[]
+  height: number
+}
+
+export const VirtualizedTable: React.FC<VirtualizedTableProps> = ({
+  data,
+  columns,
+  height
+}) => {
+  const Row = ({ index, style }: { index: number; style: any }) => (
+    <div style={style} className="flex items-center border-b">
+      {columns.map(column => (
+        <div key={column.key} className={`flex-1 px-4 py-2 ${column.className}`}>
+          {column.render ? column.render(data[index]) : data[index][column.key]}
+        </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <List
+      height={height}
+      itemCount={data.length}
+      itemSize={50}
+      className="border border-gray-200 rounded"
+    >
+      {Row}
+    </List>
+  )
+}
+```
+
+## Testing & Quality Assurance
+
+### Component Testing
+```typescript
+// __tests__/components/SalesChart.test.tsx
+import { render, screen, waitFor } from '@testing-library/react'
+import { SalesChart } from '@/components/Charts/SalesChart'
+import { mockSalesData } from '@/test/mocks'
+
+jest.mock('@/hooks/useSalesData')
+
+describe('SalesChart', () => {
+  it('renders chart with sales data', async () => {
+    const mockUseSalesData = require('@/hooks/useSalesData').useSalesData
+    mockUseSalesData.mockReturnValue({
+      data: mockSalesData,
+      loading: false,
+      error: null
+    })
+
+    render(<SalesChart timeRange="daily" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Sales Performance - daily')).toBeInTheDocument()
+    })
+  })
+
+  it('shows loading state', () => {
+    const mockUseSalesData = require('@/hooks/useSalesData').useSalesData
+    mockUseSalesData.mockReturnValue({
+      data: null,
+      loading: true,
+      error: null
+    })
+
+    render(<SalesChart timeRange="daily" />)
+    expect(screen.getByTestId('chart-skeleton')).toBeInTheDocument()
+  })
+})
+```
+
+### API Testing
+```typescript
+// __tests__/api/analytics.test.ts
+import { createMocks } from 'node-mocks-http'
+import handler from '@/pages/api/analytics/sales'
+import { db } from '@/lib/database'
+
+jest.mock('@/lib/database')
+
+describe('/api/analytics/sales', () => {
+  it('returns sales analytics data', async () => {
+    const { req, res } = createMocks({
+      method: 'GET',
+      query: {
+        timeRange: 'daily',
+        startDate: '2024-01-01',
+        endDate: '2024-01-31'
+      }
+    })
+
+    // Mock database response
+    const mockData = [
+      { date: '2024-01-01', revenue: 1000, orders: 10 },
+      { date: '2024-01-02', revenue: 1200, orders: 12 }
+    ]
+    
+    ;(db.order.findMany as jest.Mock).mockResolvedValue(mockData)
+
+    await handler(req, res)
+
+    expect(res._getStatusCode()).toBe(200)
+    const data = JSON.parse(res._getData())
+    expect(data.success).toBe(true)
+    expect(data.data).toBeDefined()
+  })
+})
+```
+
+## Deployment & Monitoring
+
+### Docker Configuration
+```dockerfile
+# Dockerfile
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY . .
+COPY --from=deps /app/node_modules ./node_modules
+RUN npm run build
+
+FROM node:18-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV production
+
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+USER nextjs
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### Monitoring Setup
+```typescript
+// lib/monitoring/metrics.ts
+import { createPrometheusMetrics } from 'prom-client'
+
+export const metrics = {
+  httpRequests: new prometheus.Counter({
+    name: 'http_requests_total',
+    help: 'Total number of HTTP requests',
+    labelNames: ['method', 'route', 'status_code']
+  }),
+  
+  analyticsQueries: new prometheus.Histogram({
+    name: 'analytics_query_duration_seconds',
+    help: 'Duration of analytics queries',
+    labelNames: ['query_type', 'store_id']
+  }),
+  
+  dashboardViews: new prometheus.Counter({
+    name: 'dashboard_views_total',
+    help: 'Total number of dashboard views',
+    labelNames: ['dashboard_type', 'user_id']
+  })
+}
+```
+
+This e-commerce analytics dashboard demonstrates advanced data visualization techniques, real-time processing capabilities, and scalable architecture patterns. It serves as a comprehensive example of building complex dashboard applications with modern web technologies.

@@ -1,0 +1,66 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  content     String   @db.LongText
+  mdx         String   @db.LongText
+  excerpt     String?  @db.Text
+  tags        String   @db.Text // JSON array as string
+  status      PostStatus @default(DRAFT)
+  views       Int      @default(0)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  publishedAt DateTime?
+
+  viewEvents ViewEvent[]
+
+  @@map("posts")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  stack       String   @db.Text // JSON array as string
+  repo        String?
+  live        String?
+  thumbnail   String?
+  featured    Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("projects")
+}
+
+model ViewEvent {
+  id        String   @id @default(cuid())
+  postId    String
+  timestamp DateTime @default(now())
+  userAgent String?
+  
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("view_events")
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}

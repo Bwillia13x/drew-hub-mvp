@@ -1,103 +1,137 @@
-import Image from "next/image";
+import Link from 'next/link';
+import { ArrowRight, Code, Rocket, Zap, Star, Users, BookOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="flex flex-col">
+      {/* Hero Section */}
+      <section className="space-y-10 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32">
+        <div className="container flex max-w-[64rem] flex-col items-center gap-4 text-center">
+          <Badge variant="emerald" className="mb-4">
+            ✨ Full Stack Developer
+          </Badge>
+          <h1 className="font-retro text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-emerald-500 animate-glow">
+            Drew Hub
+          </h1>
+          <p className="max-w-[42rem] leading-normal text-muted-foreground sm:text-xl sm:leading-8">
+            Building modern web applications with{' '}
+            <span className="text-emerald-500 font-semibold">Next.js</span>,{' '}
+            <span className="text-emerald-500 font-semibold">React</span>, and cutting-edge technologies.
+            Join me on the journey of creating amazing digital experiences.
+          </p>
+          <div className="flex gap-4 mt-8">
+            <Button asChild size="lg" className="glow-effect">
+              <Link href="/blog">
+                Read Blog <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/projects">View Projects</Link>
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-8 mt-12 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-emerald-500" />
+              <span>50+ Articles</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 text-emerald-500" />
+              <span>20+ Projects</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-emerald-500" />
+              <span>10k+ Readers</span>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </section>
+
+      {/* Features Section */}
+      <section className="container space-y-6 py-8 md:py-12 lg:py-24">
+        <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center">
+          <h2 className="font-retro text-3xl leading-[1.1] sm:text-3xl md:text-6xl text-emerald-500">
+            What I Do
+          </h2>
+          <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
+            Passionate about creating exceptional digital experiences through clean code, 
+            innovative solutions, and continuous learning.
+          </p>
+        </div>
+        
+        <div className="mx-auto grid justify-center gap-4 sm:grid-cols-2 md:max-w-[64rem] md:grid-cols-3">
+          <Card className="relative overflow-hidden group hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Code className="h-6 w-6 text-emerald-500" />
+                <CardTitle>Full Stack Development</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Building robust web applications with React, Next.js, Node.js, and modern databases.
+                From concept to deployment, I handle the entire development lifecycle.
+              </CardDescription>
+            </CardContent>
+          </Card>
+          
+          <Card className="relative overflow-hidden group hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Rocket className="h-6 w-6 text-emerald-500" />
+                <CardTitle>Technical Writing</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Sharing knowledge through in-depth tutorials, best practices, and insights 
+                on modern web development technologies and methodologies.
+              </CardDescription>
+            </CardContent>
+          </Card>
+          
+          <Card className="relative overflow-hidden group hover:shadow-lg hover:shadow-emerald-500/25 transition-all duration-300">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Zap className="h-6 w-6 text-emerald-500" />
+                <CardTitle>Performance Optimization</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Optimizing applications for speed, accessibility, and user experience. 
+                Making the web faster, one optimization at a time.
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="container space-y-6 py-8 md:py-12 lg:py-24">
+        <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center">
+          <h2 className="font-retro text-3xl leading-[1.1] sm:text-3xl md:text-6xl text-emerald-500">
+            Ready to Build?
+          </h2>
+          <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
+            Explore my latest projects, read my thoughts on web development, 
+            or check out my SaaS product that helps developers ship faster.
+          </p>
+          <div className="flex gap-4 mt-8">
+            <Button asChild variant="glow" size="lg">
+              <Link href="/product">
+                View Product <Rocket className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/about">Learn More</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

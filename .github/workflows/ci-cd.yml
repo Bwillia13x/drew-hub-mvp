@@ -1,0 +1,169 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Run tests
+        run: npm run test
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        if: success()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage/coverage-final.json
+
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_BASE_URL: https://drewhub.vercel.app
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-files
+          path: .next/
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, build]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://drewhub-staging.vercel.app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (Staging)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: ./
+          alias-domains: |
+            drewhub-staging.vercel.app
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, build]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://drewhub.vercel.app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./
+          alias-domains: |
+            drewhub.vercel.app
+
+  lighthouse:
+    name: Lighthouse Performance Audit
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            https://drewhub.vercel.app
+            https://drewhub.vercel.app/blog
+            https://drewhub.vercel.app/projects
+            https://drewhub.vercel.app/product
+            https://drewhub.vercel.app/about
+          configPath: './lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'

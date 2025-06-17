@@ -1,0 +1,489 @@
+---
+title: "Building a SaaS with TypeScript and Prisma"
+description: "A comprehensive guide to building a modern SaaS application using TypeScript, Prisma, and Next.js with authentication, payments, and database management."
+date: "2024-01-10"
+tags: ["typescript", "prisma", "saas", "nextjs", "database"]
+featured: true
+image: "/images/blog/saas-typescript-prisma.jpg"
+---
+
+# Building a SaaS with TypeScript and Prisma
+
+Creating a Software as a Service (SaaS) application requires careful planning, robust architecture, and the right technology stack. In this guide, we'll walk through building a modern SaaS application using TypeScript, Prisma, and Next.js.
+
+## Why This Stack?
+
+### TypeScript
+- **Type Safety**: Catch errors at compile time
+- **Better Developer Experience**: Excellent IDE support
+- **Scalability**: Easier to maintain large codebases
+- **Industry Standard**: Widely adopted in enterprise applications
+
+### Prisma
+- **Type-Safe Database Access**: Auto-generated types from your schema
+- **Database Agnostic**: Works with PostgreSQL, MySQL, SQLite, and more
+- **Migrations**: Version control for your database schema
+- **Excellent Tooling**: Prisma Studio for database visualization
+
+### Next.js
+- **Full-Stack Framework**: Frontend and backend in one project
+- **Performance**: Built-in optimizations and caching
+- **Developer Experience**: Hot reloading, TypeScript support
+- **Deployment**: Seamless deployment to Vercel
+
+## Project Architecture
+
+```
+saas-app/
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── src/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── dashboard/
+│   │   └── auth/
+│   ├── components/
+│   ├── lib/
+│   └── types/
+└── package.json
+```
+
+## Setting Up the Database Schema
+
+First, let's define our database schema with Prisma:
+
+```prisma
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  avatar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Subscription fields
+  subscription   Subscription?
+  stripeCustomerId String? @unique
+  
+  // Relations
+  projects    Project[]
+  apiKeys     ApiKey[]
+  
+  @@map("users")
+}
+
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  status            String
+  priceId           String
+  currentPeriodEnd  DateTime
+  cancelAtPeriodEnd Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("subscriptions")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("projects")
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  key       String   @unique
+  userId    String
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("api_keys")
+}
+```
+
+## Database Client Setup
+
+Create a singleton Prisma client:
+
+```typescript
+// src/lib/db.ts
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const db = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+```
+
+## Authentication with Clerk
+
+Set up authentication using Clerk:
+
+```typescript
+// src/middleware.ts
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/api/protected(.*)'
+])
+
+export default clerkMiddleware((auth, req) => {
+  if (isProtectedRoute(req)) auth().protect()
+})
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+}
+```
+
+## API Routes with Type Safety
+
+Create type-safe API routes:
+
+```typescript
+// src/app/api/projects/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
+import { db } from '@/lib/db'
+import { z } from 'zod'
+
+const createProjectSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional(),
+})
+
+export async function GET() {
+  try {
+    const { userId } = auth()
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const projects = await db.project.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return NextResponse.json({ projects })
+  } catch (error) {
+    console.error('Error fetching projects:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { userId } = auth()
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const validatedData = createProjectSchema.parse(body)
+
+    const project = await db.project.create({
+      data: {
+        ...validatedData,
+        userId,
+      },
+    })
+
+    return NextResponse.json({ project }, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid input', details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    console.error('Error creating project:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+## Frontend Components with Type Safety
+
+Create type-safe React components:
+
+```typescript
+// src/components/ProjectList.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Project } from '@prisma/client'
+
+interface ProjectListProps {
+  initialProjects: Project[]
+}
+
+export function ProjectList({ initialProjects }: ProjectListProps) {
+  const [projects, setProjects] = useState(initialProjects)
+  const [loading, setLoading] = useState(false)
+
+  const createProject = async (data: { name: string; description?: string }) => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create project')
+      }
+
+      const { project } = await response.json()
+      setProjects(prev => [project, ...prev])
+    } catch (error) {
+      console.error('Error creating project:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-bold">Projects</h2>
+      
+      <div className="grid gap-4">
+        {projects.map(project => (
+          <div key={project.id} className="p-4 border rounded-lg">
+            <h3 className="font-semibold">{project.name}</h3>
+            {project.description && (
+              <p className="text-gray-600">{project.description}</p>
+            )}
+            <p className="text-sm text-gray-500">
+              Created {new Date(project.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+## Error Handling and Validation
+
+Implement robust error handling:
+
+```typescript
+// src/lib/errors.ts
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number = 500,
+    public code?: string
+  ) {
+    super(message)
+    this.name = 'AppError'
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(message: string, public errors: Record<string, string[]>) {
+    super(message, 400, 'VALIDATION_ERROR')
+    this.name = 'ValidationError'
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(resource: string) {
+    super(`${resource} not found`, 404, 'NOT_FOUND')
+    this.name = 'NotFoundError'
+  }
+}
+
+// Error handler utility
+export function handleApiError(error: unknown): Response {
+  console.error('API Error:', error)
+
+  if (error instanceof ValidationError) {
+    return Response.json(
+      { error: error.message, details: error.errors },
+      { status: error.statusCode }
+    )
+  }
+
+  if (error instanceof AppError) {
+    return Response.json(
+      { error: error.message, code: error.code },
+      { status: error.statusCode }
+    )
+  }
+
+  return Response.json(
+    { error: 'Internal server error' },
+    { status: 500 }
+  )
+}
+```
+
+## Subscription Management
+
+Implement subscription logic:
+
+```typescript
+// src/lib/subscription.ts
+import { db } from './db'
+
+export async function getUserSubscription(userId: string) {
+  const subscription = await db.subscription.findUnique({
+    where: { userId },
+  })
+
+  return subscription
+}
+
+export async function isUserSubscribed(userId: string): Promise<boolean> {
+  const subscription = await getUserSubscription(userId)
+  
+  if (!subscription) return false
+  
+  const now = new Date()
+  return subscription.currentPeriodEnd > now && subscription.status === 'active'
+}
+
+export async function getUserLimits(userId: string) {
+  const isSubscribed = await isUserSubscribed(userId)
+  
+  return {
+    projects: isSubscribed ? 100 : 3,
+    apiCalls: isSubscribed ? 100000 : 1000,
+    storage: isSubscribed ? '10GB' : '100MB',
+  }
+}
+```
+
+## Testing Strategy
+
+Implement comprehensive testing:
+
+```typescript
+// src/__tests__/api/projects.test.ts
+import { GET, POST } from '@/app/api/projects/route'
+import { db } from '@/lib/db'
+
+// Mock Clerk auth
+jest.mock('@clerk/nextjs/server', () => ({
+  auth: () => ({ userId: 'test-user-id' }),
+}))
+
+describe('/api/projects', () => {
+  beforeEach(async () => {
+    // Clean up database
+    await db.project.deleteMany()
+  })
+
+  describe('GET', () => {
+    it('should return user projects', async () => {
+      // Create test project
+      await db.project.create({
+        data: {
+          name: 'Test Project',
+          userId: 'test-user-id',
+        },
+      })
+
+      const response = await GET()
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.projects).toHaveLength(1)
+      expect(data.projects[0].name).toBe('Test Project')
+    })
+  })
+
+  describe('POST', () => {
+    it('should create a new project', async () => {
+      const request = new Request('http://localhost', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'New Project',
+          description: 'Test description',
+        }),
+      })
+
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(201)
+      expect(data.project.name).toBe('New Project')
+    })
+  })
+})
+```
+
+## Deployment Considerations
+
+### Environment Variables
+```bash
+# .env.local
+DATABASE_URL="postgresql://..."
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="..."
+CLERK_SECRET_KEY="..."
+STRIPE_SECRET_KEY="..."
+STRIPE_WEBHOOK_SECRET="..."
+```
+
+### Production Checklist
+- [ ] Set up production database
+- [ ] Configure error monitoring (Sentry)
+- [ ] Set up analytics (PostHog, Google Analytics)
+- [ ] Configure CDN for static assets
+- [ ] Implement proper logging
+- [ ] Set up health checks
+- [ ] Configure CORS policies
+- [ ] Enable rate limiting
+
+## Conclusion
+
+Building a SaaS application with TypeScript and Prisma provides a solid foundation for scalable, maintainable applications. The type safety throughout the stack reduces bugs and improves developer experience, while Prisma's tooling makes database management straightforward.
+
+Key takeaways:
+- Use TypeScript everywhere for better reliability
+- Implement proper error handling and validation
+- Design your database schema carefully
+- Test your APIs thoroughly
+- Plan for scalability from the start
+
+This stack has proven successful for many production SaaS applications and provides an excellent developer experience while maintaining high code quality and performance.

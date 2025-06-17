@@ -1,0 +1,303 @@
+---
+title: "Drew Hub - Modern SaaS Platform"
+description: "A comprehensive SaaS platform built with Next.js 14, featuring blog engine, CMS dashboard, authentication, and modern UI components."
+stack: ["Next.js 14", "TypeScript", "Tailwind CSS", "Prisma", "Clerk", "PlanetScale"]
+repo: "https://github.com/drewwebdev/drew-hub"
+live: "https://drew-hub.vercel.app"
+thumbnail: "/images/projects/drew-hub.jpg"
+featured: true
+sortOrder: 1
+---
+
+# Drew Hub - Modern SaaS Platform
+
+Drew Hub is a comprehensive, production-ready SaaS platform that demonstrates modern web development best practices. Built with Next.js 14 and TypeScript, it features a complete blog engine, CMS dashboard, authentication system, and custom UI components.
+
+## Features
+
+### 🚀 Core Technology Stack
+- **Next.js 14** with App Router and Server Components
+- **TypeScript** for type safety throughout the application
+- **Tailwind CSS** with custom design system
+- **Prisma** for type-safe database operations
+- **Clerk** for authentication and user management
+- **PlanetScale** for serverless MySQL database
+
+### 📝 Blog Engine
+- **MDX Support** for rich content authoring
+- **Contentlayer** for content management
+- **Algolia Search** integration for fast content discovery
+- **RSS/Atom Feeds** for content syndication
+- **Dynamic Sitemap** generation for SEO
+- **Tag-based Organization** with filtering capabilities
+
+### 🎛️ CMS Dashboard
+- **Admin Interface** for content management
+- **Analytics Dashboard** with key performance indicators
+- **CRUD Operations** for posts and projects
+- **Drag-and-Drop** project reordering
+- **User Management** and settings configuration
+- **Newsletter Management** with subscriber analytics
+
+### 🎨 Modern UI/UX
+- **Custom Design System** built on Tailwind CSS
+- **shadcn/ui Components** for consistent interface elements
+- **Responsive Design** optimized for all devices
+- **Dark Mode** support with system preference detection
+- **Accessibility** compliant with WCAG guidelines
+- **Performance Optimized** with Core Web Vitals focus
+
+### 🔒 Security & Authentication
+- **Clerk Integration** for secure user authentication
+- **Role-based Access Control** for different user types
+- **API Route Protection** with middleware
+- **CSRF Protection** and security headers
+- **Content Security Policy** implementation
+
+## Technical Implementation
+
+### Architecture Decisions
+
+#### App Router Implementation
+```typescript
+// app/blog/[slug]/page.tsx
+import { notFound } from 'next/navigation'
+import { allPosts } from 'contentlayer/generated'
+import { MDXContent } from '@/components/mdx/mdx-content'
+
+export async function generateStaticParams() {
+  return allPosts.map((post) => ({
+    slug: post.slug,
+  }))
+}
+
+export default function BlogPost({ params }: { params: { slug: string } }) {
+  const post = allPosts.find((post) => post.slug === params.slug)
+  
+  if (!post) {
+    notFound()
+  }
+
+  return (
+    <article className="prose prose-lg max-w-4xl mx-auto">
+      <header className="mb-8">
+        <h1 className="text-4xl font-bold">{post.title}</h1>
+        <p className="text-xl text-gray-600 mt-4">{post.description}</p>
+      </header>
+      <MDXContent code={post.body.code} />
+    </article>
+  )
+}
+```
+
+#### Database Schema Design
+```prisma
+model Post {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String
+  content     String   @db.Text
+  published   Boolean  @default(false)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+  tags     PostTag[]
+  
+  @@map("posts")
+}
+```
+
+#### API Route Implementation
+```typescript
+// app/api/posts/route.ts
+import { NextRequest } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
+import { db } from '@/lib/db'
+import { createPostSchema } from '@/lib/validations/post'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { userId } = auth()
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const validatedData = createPostSchema.parse(body)
+
+    const post = await db.post.create({
+      data: {
+        ...validatedData,
+        authorId: userId,
+        slug: slugify(validatedData.title),
+      },
+    })
+
+    return Response.json({ post }, { status: 201 })
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+```
+
+### Performance Optimizations
+
+#### Image Optimization
+- **Next.js Image Component** for automatic optimization
+- **WebP/AVIF** format support with fallbacks
+- **Lazy Loading** with intersection observer
+- **Responsive Images** with appropriate sizing
+
+#### Caching Strategy
+```typescript
+// lib/cache.ts
+import { unstable_cache } from 'next/cache'
+
+export const getCachedPosts = unstable_cache(
+  async () => {
+    return await db.post.findMany({
+      where: { published: true },
+      orderBy: { createdAt: 'desc' },
+      include: { author: true, tags: true },
+    })
+  },
+  ['posts'],
+  { revalidate: 3600 } // 1 hour
+)
+```
+
+#### Bundle Optimization
+- **Dynamic Imports** for code splitting
+- **Tree Shaking** to eliminate unused code
+- **Compression** with gzip/brotli
+- **CDN Integration** for static assets
+
+## Development Workflow
+
+### Code Quality
+- **ESLint** with strict TypeScript rules
+- **Prettier** for consistent code formatting
+- **Husky** for pre-commit hooks
+- **Conventional Commits** for better git history
+
+### Testing Strategy
+```typescript
+// __tests__/components/blog-post.test.tsx
+import { render, screen } from '@testing-library/react'
+import { BlogPost } from '@/components/blog/blog-post'
+
+const mockPost = {
+  id: '1',
+  title: 'Test Post',
+  description: 'Test description',
+  content: 'Test content',
+  createdAt: new Date(),
+}
+
+describe('BlogPost', () => {
+  it('renders post title and content', () => {
+    render(<BlogPost post={mockPost} />)
+    
+    expect(screen.getByText('Test Post')).toBeInTheDocument()
+    expect(screen.getByText('Test description')).toBeInTheDocument()
+  })
+})
+```
+
+### CI/CD Pipeline
+```yaml
+# .github/workflows/ci-cd.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm run test
+      - run: npm run build
+```
+
+## Deployment & Infrastructure
+
+### Vercel Deployment
+- **Edge Functions** for optimal performance
+- **Analytics** integration for monitoring
+- **Environment Variables** management
+- **Preview Deployments** for pull requests
+
+### Database Strategy
+- **PlanetScale** for serverless MySQL
+- **Branch-based Development** for schema changes
+- **Connection Pooling** for optimal performance
+- **Backup and Recovery** procedures
+
+### Monitoring & Analytics
+- **Vercel Analytics** for performance metrics
+- **Error Tracking** with Sentry integration
+- **User Analytics** with privacy-focused solutions
+- **Core Web Vitals** monitoring
+
+## Learning Outcomes
+
+This project demonstrates proficiency in:
+
+1. **Modern React Patterns** - Server Components, Suspense, Error Boundaries
+2. **Full-Stack Development** - API design, database modeling, authentication
+3. **Performance Optimization** - Caching strategies, image optimization, Core Web Vitals
+4. **DevOps Practices** - CI/CD pipelines, testing strategies, deployment automation
+5. **User Experience** - Responsive design, accessibility, progressive enhancement
+
+## Future Enhancements
+
+### Planned Features
+- [ ] **Multi-tenant Architecture** for SaaS scaling
+- [ ] **Advanced Analytics** with custom dashboards
+- [ ] **Email Marketing** integration
+- [ ] **Payment Processing** with Stripe
+- [ ] **API Rate Limiting** and usage analytics
+- [ ] **Content Localization** for international users
+
+### Technical Improvements
+- [ ] **Edge Computing** optimization
+- [ ] **Database Sharding** for scalability
+- [ ] **Real-time Features** with WebSockets
+- [ ] **Progressive Web App** capabilities
+- [ ] **Advanced Caching** with Redis
+- [ ] **Microservices** architecture migration
+
+## Repository Structure
+
+```
+drew-hub/
+├── .github/workflows/     # CI/CD pipelines
+├── app/                   # Next.js app directory
+├── components/            # Reusable React components
+├── content/              # MDX content files
+├── lib/                  # Utility functions and configurations
+├── prisma/               # Database schema and migrations
+├── public/               # Static assets
+├── styles/               # Global styles and Tailwind config
+└── types/                # TypeScript type definitions
+```
+
+This project serves as a comprehensive example of modern web development practices, demonstrating how to build scalable, maintainable, and performant web applications using the latest technologies and best practices.
