@@ -1,6 +1,11 @@
 # Drew Hub
 
+[![CI/CD Pipeline](https://github.com/drewpayment/drew-hub/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/drewpayment/drew-hub/actions/workflows/ci-cd.yml)
+
 A comprehensive Next.js 14 workspace featuring a modern blog engine, CMS dashboard, and SaaS landing page. Built with TypeScript, Tailwind CSS, and best practices for production-ready applications.
+
+## Development Status
+This project is currently under active development. You can find a detailed breakdown of completed features, ongoing work, and future plans in the [DEVELOPMENT_STATUS.md](DEVELOPMENT_STATUS.md) file.
 
 ## 🚀 Features
 
